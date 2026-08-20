@@ -430,6 +430,7 @@ def play_alert(cfg: dict[str, Any]) -> None:
 
 
 def write_status(state: dict[str, Any]) -> None:
+    state["updated_at"] = time.time()
     atomic_write_json(STATE_FILE, state)
 
 
@@ -471,8 +472,11 @@ def run_monitor(cfg: dict[str, Any]) -> int:
     consecutive_errors = 0
     state: dict[str, Any] = {
         "app_running": False,
+        "queue_state": "未运行",
         "last_queue": None,
         "last_event": None,
+        "last_success": None,
+        "current_network": None,
         "last_network": None,
         "last_alert": None,
     }
@@ -502,12 +506,16 @@ def run_monitor(cfg: dict[str, Any]) -> int:
             state.update(
                 {
                     "app_running": True,
+                    "queue_state": "等待排队日志",
                     "last_queue": None,
                     "last_event": None,
+                    "last_success": None,
+                    "current_network": None,
                     "last_network": None,
                     "last_alert": None,
                 }
             )
+            state["current_network"] = network_summary(cfg)
             write_status(state)
 
         if not app_running and running:
@@ -517,12 +525,16 @@ def run_monitor(cfg: dict[str, Any]) -> int:
             state.update(
                 {
                     "app_running": False,
+                    "queue_state": "未运行",
                     "last_queue": None,
                     "last_event": None,
+                    "last_success": None,
+                    "current_network": None,
                     "last_network": None,
                     "last_alert": None,
                 }
             )
+            state["current_network"] = network_summary(cfg)
             write_status(state)
 
         if not running:
@@ -540,10 +552,13 @@ def run_monitor(cfg: dict[str, Any]) -> int:
             else:
                 for row_id, created_at, content in rows:
                     info = parse_queue_row(row_id, created_at, content, cfg)
-                    state["last_event"] = info
+                    if info.get("source"):
+                        state["last_event"] = info
 
                     if info.get("queue_success"):
                         if not alerted:
+                            state["queue_state"] = "排队成功"
+                            state["last_success"] = info
                             summary = network_summary(cfg)
                             state["last_network"] = summary
                             log.info(
@@ -575,7 +590,9 @@ def run_monitor(cfg: dict[str, Any]) -> int:
                                 }
                             alerted = True
                     elif info.get("queueing"):
-                        state["last_queue"] = info
+                        state["queue_state"] = "排队中"
+                        if info.get("source") == "http" or state["last_queue"] is None:
+                            state["last_queue"] = info
                         # 如果同一客户端生命周期内重新开始排队，允许下一次成功再次提醒。
                         alerted = False
                         log.info(
@@ -586,6 +603,7 @@ def run_monitor(cfg: dict[str, Any]) -> int:
                         )
 
                 last_id = current_max
+                state["current_network"] = network_summary(cfg)
                 write_status(state)
                 consecutive_errors = 0
         except Exception as exc:

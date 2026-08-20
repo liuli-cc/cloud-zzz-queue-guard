@@ -12,6 +12,17 @@ chmod +x install.sh uninstall.sh status.sh
 
 安装后程序会作为当前用户的 LaunchAgent 常驻运行，不用手动打开终端。
 
+## 排队窗口
+
+运行下面的命令会编译并打开一个桌面窗口，每秒读取后台状态文件，实时显示客户端状态、排队人数、预计等待、当前网络和提醒状态：
+
+```bash
+cd /Users/liuli/内蒙古师范大学/云绝区零排队提醒
+./build_window.sh
+```
+
+窗口源码在 `QueueWindow.swift`。下次想重新打开窗口时，直接双击 `云绝区零排队提醒.app` 即可。
+
 ## 查看状态
 
 ```bash
