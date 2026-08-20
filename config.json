@@ -1,0 +1,48 @@
+{
+  "app_process_pattern": "CloudGame.app/CloudGame",
+  "log_db_path": "~/Library/Containers/com.miHoYo.cloudgames.Nap/Data/Library/Application Support/kibana/log.db",
+  "poll_interval_seconds": 1.0,
+  "idle_check_seconds": 2.0,
+  "queue_success_statuses": [
+    "FINISHED"
+  ],
+  "queue_waiting_statuses": [
+    "QUEUEING",
+    "QUEUED"
+  ],
+  "hotspot_interfaces": [
+    "en0"
+  ],
+  "hotspot_gateways": [
+    "172.20.10.1",
+    "192.168.43.1",
+    "192.168.137.1",
+    "192.168.42.129"
+  ],
+  "hotspot_gateway_prefixes": [
+    "172.20.10.",
+    "192.168.43.",
+    "192.168.137.",
+    "192.168.42."
+  ],
+  "hotspot_ssid_keywords": [
+    "iphone",
+    "ipad",
+    "oppo",
+    "vivo",
+    "redmi",
+    "xiaomi",
+    "huawei",
+    "honor",
+    "oneplus",
+    "samsung galaxy",
+    "realme",
+    "meizu",
+    "热点",
+    "手机"
+  ],
+  "sound_file": "/System/Library/Sounds/Glass.aiff",
+  "sound_repeat": 3,
+  "also_say": true,
+  "require_hotspot": true
+}
