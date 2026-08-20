@@ -279,6 +279,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = "云·绝区零排队监测"
         window.isReleasedWhenClosed = false
         window.setContentSize(contentRect.size)
+        window.level = .floating
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
         let dashboard = DashboardView(frame: NSRect(origin: .zero, size: contentRect.size))
         window.contentView = dashboard
@@ -286,6 +288,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.dashboard = dashboard
 
         window.center()
+        window.orderFrontRegardless()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
