@@ -44,5 +44,5 @@
   "sound_file": "/System/Library/Sounds/Glass.aiff",
   "sound_repeat": 3,
   "also_say": true,
-  "require_hotspot": true
+  "require_hotspot": false
 }

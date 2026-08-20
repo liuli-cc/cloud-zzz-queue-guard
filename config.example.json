@@ -43,5 +43,5 @@
     "手机"
   ],
   "sound_repeat": 3,
-  "require_hotspot": true
+  "require_hotspot": false
 }

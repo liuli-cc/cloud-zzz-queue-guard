@@ -74,7 +74,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "sound_file": "/System/Library/Sounds/Glass.aiff",
     "sound_repeat": 3,
     "also_say": True,
-    "require_hotspot": True,
+    "require_hotspot": False,
 }
 
 

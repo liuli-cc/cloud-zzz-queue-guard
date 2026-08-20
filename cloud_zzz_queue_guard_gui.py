@@ -101,7 +101,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "手机",
     ],
     "sound_repeat": 3,
-    "require_hotspot": True,
+    "require_hotspot": False,
 }
 
 
@@ -623,12 +623,12 @@ def monitor_loop(
                             summary = network_summary(cfg)
                             shared["current_network"] = summary
                             if not alerted:
-                                if summary["hotspot"] or not cfg.get("require_hotspot", True):
-                                    log.info("排队成功，当前网络为热点，播放提示音。")
+                                if summary["hotspot"] or not cfg.get("require_hotspot", False):
+                                    log.info("排队成功，播放提示音。")
                                     play_alert(cfg)
                                     shared["last_alert"] = {
                                         "time": time.time(),
-                                        "reason": "queue_success_on_hotspot",
+                                        "reason": "queue_success",
                                     }
                                 else:
                                     log.info("排队成功，当前网络不是热点，不播放提示音。")
