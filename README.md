@@ -67,3 +67,13 @@ macOS 26 会把当前 Wi-Fi 名称显示为 `<redacted>`，所以程序不依赖
 cd /Users/liuli/内蒙古师范大学/云绝区零排队提醒
 ./uninstall.sh
 ```
+
+## Windows 版
+
+Windows 用户可以直接下载 `CloudZZZQueueMonitor.exe`，双击即可打开排队监测窗口。程序会在后台跟随云绝区零客户端启动/关闭，自动搜索客户端日志数据库；排队成功且当前网络是热点时播放 Windows 提示音。
+
+下载地址在仓库 Releases 页面：
+
+<https://github.com/liuli-cc/cloud-zzz-queue-guard/releases>
+
+如果自动搜索不到日志数据库，可以在 EXE 同目录放一个 `config.json`，把 `log_db_path` 改成云绝区零客户端日志 `log.db` 的实际路径。可以参考 `config.windows.example.json`。

@@ -1,0 +1,47 @@
+{
+  "app_process_keywords": [
+    "CloudGame.exe",
+    "云绝区零",
+    "cloudgame"
+  ],
+  "log_db_path": "auto",
+  "poll_interval_seconds": 1.0,
+  "idle_check_seconds": 2.0,
+  "queue_success_statuses": [
+    "FINISHED"
+  ],
+  "queue_waiting_statuses": [
+    "QUEUEING",
+    "QUEUED"
+  ],
+  "hotspot_gateways": [
+    "172.20.10.1",
+    "192.168.43.1",
+    "192.168.137.1",
+    "192.168.42.129"
+  ],
+  "hotspot_gateway_prefixes": [
+    "172.20.10.",
+    "192.168.43.",
+    "192.168.137.",
+    "192.168.42."
+  ],
+  "hotspot_ssid_keywords": [
+    "iphone",
+    "ipad",
+    "oppo",
+    "vivo",
+    "redmi",
+    "xiaomi",
+    "huawei",
+    "honor",
+    "oneplus",
+    "samsung",
+    "realme",
+    "meizu",
+    "热点",
+    "手机"
+  ],
+  "sound_repeat": 3,
+  "require_hotspot": true
+}
