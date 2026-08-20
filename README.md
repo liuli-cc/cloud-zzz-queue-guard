@@ -1,79 +1,56 @@
 # 云·绝区零排队提醒
 
-这个目录里是一个 macOS 后台监测程序。它会跟着 `/Applications/云·绝区零.app` 的启动和退出自动切换监测状态，实时读取客户端自己写入的排队日志；当检测到排队成功，并且电脑当前默认网络被判断为手机热点时，会播放系统提示音并朗读“云绝区零排队成功”。
+实时监测云·绝区零的排队状态：客户端启动后自动开始监测，客户端退出后自动停止。排队成功时，如果电脑当前网络是手机热点，会播放系统提示音并提示“云绝区零排队成功”。
 
-## 安装
+支持 macOS 和 Windows 两个平台，均可直接下载运行，不需要安装 Python 或其他依赖。
 
-```bash
-cd /Users/liuli/内蒙古师范大学/云绝区零排队提醒
-chmod +x install.sh uninstall.sh status.sh
-./install.sh
+## 直接下载
+
+所有安装包都放在 GitHub Releases：
+
+<https://github.com/liuli-cc/cloud-zzz-queue-guard/releases>
+
+### macOS 使用方法
+
+1. 下载 `CloudZZZQueueMonitor-macOS.zip`。
+2. 解压后把 `CloudZZZQueueMonitor.app` 拖到“应用程序”文件夹。
+3. 首次打开如果被 macOS 拦截，右键点击 App，选择“打开”，再点一次“打开”。
+4. 打开云·绝区零后，排队窗口会自动显示排队人数和预计等待时间。
+
+macOS 的日志和配置保存在：
+
+```text
+~/Library/Application Support/CloudZZZQueueMonitor
 ```
 
-安装后程序会作为当前用户的 LaunchAgent 常驻运行，不用手动打开终端。
+### Windows 使用方法
 
-## 排队窗口
+1. 下载 `CloudZZZQueueMonitor.exe`。
+2. 双击运行。如果 Windows SmartScreen 提示，点击“更多信息”，再选择“仍要运行”。
+3. 打开云·绝区零后，排队窗口会自动显示排队状态。
 
-运行下面的命令会编译并打开一个桌面窗口，每秒读取后台状态文件，实时显示客户端状态、排队人数、预计等待、当前网络和提醒状态：
+Windows 的日志和配置默认保存在 EXE 同目录；如果该目录不可写，会改用 `%LOCALAPPDATA%\CloudZZZQueueMonitor`。
 
-```bash
-cd /Users/liuli/内蒙古师范大学/云绝区零排队提醒
-./build_window.sh
-```
+## 找不到排队日志时
 
-窗口源码在 `QueueWindow.swift`。下次想重新打开窗口时，直接双击 `云绝区零排队提醒.app` 即可。
+程序会优先使用自动检测到的客户端日志数据库。如果显示“未找到云绝区零排队日志数据库”，可以手动指定：
 
-## 查看状态
+- macOS：在 `~/Library/Application Support/CloudZZZQueueMonitor/config.json` 中填写 `log_db_path`
+- Windows：在 EXE 同目录的 `config.json` 中填写 `log_db_path`
 
-```bash
-cd /Users/liuli/内蒙古师范大学/云绝区零排队提醒
-./status.sh
-```
-
-也可以看日志：
-
-```bash
-tail -f /Users/liuli/内蒙古师范大学/云绝区零排队提醒/logs/guard.log
-```
-
-## 测试
-
-测试当前网络是否被判定为热点：
-
-```bash
-./cloud_zzz_queue_guard.py --test-network
-```
-
-测试排队日志解析（云·绝区零打开且正在排队时最有意义）：
-
-```bash
-./cloud_zzz_queue_guard.py --test-log
-```
+配置示例见 `config.example.json`。
 
 ## 热点判断规则
 
-macOS 26 会把当前 Wi-Fi 名称显示为 `<redacted>`，所以程序不依赖 SSID，优先使用默认路由的网关判断。默认把以下常见手机热点网段视为热点：
+程序优先使用默认网关判断，默认把以下常见手机热点网段视为热点：
 
 - `172.20.10.1`，常见于 iPhone 个人热点
 - `192.168.43.1`，常见于 Android 热点
 - `192.168.137.1`，常见于 Windows 移动热点
 - `192.168.42.129`，常见于 Android USB/热点
 
-如果你的热点网关不同，编辑 `config.json` 里的 `hotspot_gateways` 或 `hotspot_gateway_prefixes`，然后重新运行 `./install.sh`。
+如果热点网关不同，编辑配置文件中的 `hotspot_gateways` 或 `hotspot_gateway_prefixes`。
 
-## 卸载
+## 源码方式使用
 
-```bash
-cd /Users/liuli/内蒙古师范大学/云绝区零排队提醒
-./uninstall.sh
-```
-
-## Windows 版
-
-Windows 用户可以直接下载 `CloudZZZQueueMonitor.exe`，双击即可打开排队监测窗口。程序会在后台跟随云绝区零客户端启动/关闭，自动搜索客户端日志数据库；排队成功且当前网络是热点时播放 Windows 提示音。
-
-下载地址在仓库 Releases 页面：
-
-<https://github.com/liuli-cc/cloud-zzz-queue-guard/releases>
-
-如果自动搜索不到日志数据库，可以在 EXE 同目录放一个 `config.json`，把 `log_db_path` 改成云绝区零客户端日志 `log.db` 的实际路径。可以参考 `config.windows.example.json`。
+仓库里的 `cloud_zzz_queue_guard.py`、`QueueWindow.swift` 相关源码主要供开发使用。打包后的桌面程序由 `cloud_zzz_queue_guard_gui.py` 构建，GitHub Actions 会自动生成 macOS App 和 Windows EXE。

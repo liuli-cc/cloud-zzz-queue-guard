@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Windows 版云·绝区零排队监测窗口。
+"""macOS / Windows 通用版云·绝区零排队监测窗口。
 
 用 Tkinter 提供桌面窗口，同时在一个后台线程里跟随云·绝区零进程，
 读取客户端 SQLite 日志中的排队状态。排队成功且当前网络被判断为热点时，
-会播放 Windows 提示音。
+会播放系统提示音。
 """
 
 from __future__ import annotations
@@ -34,7 +34,9 @@ except ImportError:
 
 
 def runtime_dir() -> pathlib.Path:
-    if getattr(sys, "frozen", False):
+    if sys.platform == "darwin":
+        base = pathlib.Path.home() / "Library/Application Support/CloudZZZQueueMonitor"
+    elif getattr(sys, "frozen", False):
         base = pathlib.Path(sys.executable).resolve().parent
     else:
         base = pathlib.Path(__file__).resolve().parent
@@ -45,7 +47,9 @@ def runtime_dir() -> pathlib.Path:
         probe.unlink()
         return base
     except OSError:
-        fallback = pathlib.Path(os.environ.get("LOCALAPPDATA", pathlib.Path.home()))
+        fallback = pathlib.Path(
+            os.environ.get("LOCALAPPDATA", os.environ.get("APPDATA", pathlib.Path.home()))
+        )
         fallback = fallback / "CloudZZZQueueMonitor"
         fallback.mkdir(parents=True, exist_ok=True)
         return fallback
@@ -115,7 +119,7 @@ def load_config() -> dict[str, Any]:
 
 def setup_logging() -> logging.Logger:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    log = logging.getLogger("windows_guard")
+    log = logging.getLogger("queue_guard")
     log.setLevel(logging.INFO)
     handler = logging.FileHandler(LOG_DIR / "guard.log", encoding="utf-8")
     handler.setFormatter(
@@ -144,6 +148,19 @@ def run_cmd(args: list[str], timeout: float = 8.0) -> str:
 
 
 def is_cloud_game_running(cfg: dict[str, Any]) -> bool:
+    if sys.platform == "darwin":
+        try:
+            result = subprocess.run(
+                ["pgrep", "-f", "CloudGame.app/CloudGame"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=3,
+                check=False,
+            )
+            return result.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            return False
+
     keywords = [str(x).lower() for x in cfg.get("app_process_keywords", [])]
     for keyword in keywords:
         out = run_cmd(["tasklist", "/FI", f"IMAGENAME eq {keyword}"], timeout=5)
@@ -175,6 +192,8 @@ def has_plat_cloudgame_table(path: pathlib.Path) -> bool:
 
 
 def process_install_dirs() -> list[pathlib.Path]:
+    if sys.platform != "win32":
+        return []
     ps = (
         "Get-CimInstance Win32_Process | Where-Object { "
         "$_.Name -match 'CloudGame|YunJueQuLing|绝区零' -and $_.ExecutablePath } | "
@@ -194,6 +213,16 @@ def process_install_dirs() -> list[pathlib.Path]:
 
 
 def discover_log_db() -> pathlib.Path | None:
+    if sys.platform == "darwin":
+        known = (
+            pathlib.Path.home()
+            / "Library/Containers/com.miHoYo.cloudgames.Nap"
+            / "Data/Library/Application Support/kibana/log.db"
+        )
+        if known.exists() and has_plat_cloudgame_table(known):
+            return known
+        return None
+
     env = os.environ
     roots: list[pathlib.Path] = []
     for key in ("LOCALAPPDATA", "APPDATA", "PROGRAMDATA"):
@@ -249,6 +278,8 @@ def resolve_log_db(cfg: dict[str, Any]) -> pathlib.Path | None:
         path = pathlib.Path(str(configured)).expanduser()
         if path.exists():
             return path
+    if sys.platform == "darwin":
+        return discover_log_db()
     return discover_log_db()
 
 
@@ -418,6 +449,15 @@ def parse_queue_row(row_id: int, content: str, cfg: dict[str, Any]) -> dict[str,
 
 
 def default_gateway() -> str | None:
+    if sys.platform == "darwin":
+        out = run_cmd(["route", "-n", "get", "default"], timeout=5)
+        for line in out.splitlines():
+            stripped = line.strip().lower()
+            if stripped.startswith("gateway:"):
+                value = stripped.split(":", 1)[1].strip()
+                return value or None
+        return None
+
     out = run_cmd(["route", "print", "-4", "0.0.0.0"], timeout=8)
     for line in out.splitlines():
         parts = line.split()
@@ -427,6 +467,8 @@ def default_gateway() -> str | None:
 
 
 def wifi_ssid() -> str | None:
+    if sys.platform != "win32":
+        return None
     out = run_cmd(["netsh", "wlan", "show", "interfaces"], timeout=8)
     match = re.search(r"SSID\s*:\s*(.+)", out)
     if match:
@@ -459,7 +501,13 @@ def network_summary(cfg: dict[str, Any]) -> dict[str, Any]:
 
 def play_alert(cfg: dict[str, Any]) -> None:
     repeat = max(1, int(cfg.get("sound_repeat", 3)))
-    if winsound is not None:
+    if sys.platform == "darwin":
+        sound = "/System/Library/Sounds/Glass.aiff"
+        for _ in range(repeat):
+            subprocess.Popen(["afplay", sound])
+            time.sleep(0.8)
+        subprocess.Popen(["say", "云绝区零排队成功"])
+    elif winsound is not None:
         for _ in range(repeat):
             winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
             time.sleep(0.35)
@@ -488,7 +536,7 @@ def monitor_loop(
     ui_queue: "queue.Queue[dict[str, Any]]",
     stop_event: threading.Event,
 ) -> None:
-    log = logging.getLogger("windows_guard")
+    log = logging.getLogger("queue_guard")
     running = False
     last_id: int | None = None
     alerted = False
