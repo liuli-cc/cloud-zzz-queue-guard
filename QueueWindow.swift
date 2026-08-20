@@ -113,9 +113,9 @@ final class DashboardView: NSView {
 
         let queueCard = CardView(frame: NSRect(x: 20, y: 360, width: 420, height: 80), fill: .white)
         addSubview(queueCard)
-        queueState.frame = NSRect(x: 36, y: 386, width: 250, height: 38)
+        queueState.frame = NSRect(x: 36, y: 30, width: 250, height: 38)
         queueCard.addSubview(queueState)
-        queueDetail.frame = NSRect(x: 36, y: 368, width: 388, height: 20)
+        queueDetail.frame = NSRect(x: 36, y: 6, width: 388, height: 20)
         queueCard.addSubview(queueDetail)
 
         let rankCard = CardView(frame: NSRect(x: 20, y: 268, width: 132, height: 84), fill: .white)
@@ -126,29 +126,29 @@ final class DashboardView: NSView {
         addSubview(waitCard)
 
         rankTitle.stringValue = "前方人数"
-        rankTitle.frame = NSRect(x: 24, y: 314, width: 124, height: 16)
-        rankValue.frame = NSRect(x: 24, y: 280, width: 124, height: 32)
+        rankTitle.frame = NSRect(x: 16, y: 58, width: 100, height: 16)
+        rankValue.frame = NSRect(x: 16, y: 20, width: 100, height: 32)
         rankCard.addSubview(rankTitle)
         rankCard.addSubview(rankValue)
 
         lengthTitle.stringValue = "总排队人数"
-        lengthTitle.frame = NSRect(x: 168, y: 314, width: 124, height: 16)
-        lengthValue.frame = NSRect(x: 168, y: 280, width: 124, height: 32)
+        lengthTitle.frame = NSRect(x: 16, y: 58, width: 100, height: 16)
+        lengthValue.frame = NSRect(x: 16, y: 20, width: 100, height: 32)
         lengthCard.addSubview(lengthTitle)
         lengthCard.addSubview(lengthValue)
 
         waitTitle.stringValue = "预计等待"
-        waitTitle.frame = NSRect(x: 312, y: 314, width: 124, height: 16)
-        waitValue.frame = NSRect(x: 312, y: 280, width: 124, height: 32)
+        waitTitle.frame = NSRect(x: 16, y: 58, width: 100, height: 16)
+        waitValue.frame = NSRect(x: 16, y: 20, width: 100, height: 32)
         waitCard.addSubview(waitTitle)
         waitCard.addSubview(waitValue)
 
         let networkCard = CardView(frame: NSRect(x: 20, y: 178, width: 420, height: 78), fill: .white)
         addSubview(networkCard)
         networkTitle.stringValue = "当前网络"
-        networkTitle.frame = NSRect(x: 36, y: 226, width: 388, height: 16)
-        networkValue.frame = NSRect(x: 36, y: 196, width: 220, height: 24)
-        gatewayValue.frame = NSRect(x: 250, y: 196, width: 174, height: 20)
+        networkTitle.frame = NSRect(x: 16, y: 54, width: 388, height: 16)
+        networkValue.frame = NSRect(x: 16, y: 24, width: 220, height: 24)
+        gatewayValue.frame = NSRect(x: 230, y: 24, width: 174, height: 20)
         networkCard.addSubview(networkTitle)
         networkCard.addSubview(networkValue)
         networkCard.addSubview(gatewayValue)
@@ -156,9 +156,9 @@ final class DashboardView: NSView {
         let alertCard = CardView(frame: NSRect(x: 20, y: 88, width: 420, height: 78), fill: .white)
         addSubview(alertCard)
         alertTitle.stringValue = "提醒状态"
-        alertTitle.frame = NSRect(x: 36, y: 136, width: 220, height: 16)
-        alertValue.frame = NSRect(x: 36, y: 106, width: 260, height: 20)
-        updatedValue.frame = NSRect(x: 300, y: 106, width: 124, height: 18)
+        alertTitle.frame = NSRect(x: 16, y: 54, width: 220, height: 16)
+        alertValue.frame = NSRect(x: 16, y: 24, width: 260, height: 20)
+        updatedValue.frame = NSRect(x: 280, y: 24, width: 124, height: 18)
         alertCard.addSubview(alertTitle)
         alertCard.addSubview(alertValue)
         alertCard.addSubview(updatedValue)
@@ -279,8 +279,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = "云·绝区零排队监测"
         window.isReleasedWhenClosed = false
         window.setContentSize(contentRect.size)
-        window.level = .floating
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.collectionBehavior = [.canJoinAllSpaces]
 
         let dashboard = DashboardView(frame: NSRect(origin: .zero, size: contentRect.size))
         window.contentView = dashboard
