@@ -1,333 +1,328 @@
-import Cocoa
+import AppKit
+import Foundation
+import SwiftUI
 
-func hexColor(_ value: UInt32) -> NSColor {
-    NSColor(
-        srgbRed: CGFloat((value >> 16) & 0xFF) / 255.0,
-        green: CGFloat((value >> 8) & 0xFF) / 255.0,
-        blue: CGFloat(value & 0xFF) / 255.0,
-        alpha: 1.0
-    )
-}
-
-func makeLabel(
-    size: CGFloat,
-    weight: NSFont.Weight,
-    color: NSColor,
-    alignment: NSTextAlignment = .left
-) -> NSTextField {
-    let label = NSTextField(labelWithString: "")
-    label.font = NSFont.systemFont(ofSize: size, weight: weight)
-    label.textColor = color
-    label.alignment = alignment
-    label.lineBreakMode = .byWordWrapping
-    label.maximumNumberOfLines = 2
-    return label
-}
-
-final class CardView: NSView {
-    init(frame: NSRect, fill: NSColor) {
-        super.init(frame: frame)
-        wantsLayer = true
-        layer?.backgroundColor = fill.cgColor
-        layer?.cornerRadius = 8
-        layer?.masksToBounds = true
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+@MainActor
+private final class TopPinnedPanel: NSPanel {
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        frameRect
     }
 }
 
-final class StatusPill: NSView {
-    let label = makeLabel(size: 13, weight: .semibold, color: .white, alignment: .center)
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        wantsLayer = true
-        layer?.cornerRadius = frame.height / 2
-        label.frame = bounds
-        addSubview(label)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: centerXAnchor),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.widthAnchor.constraint(equalTo: widthAnchor, constant: -12),
-        ])
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    func set(text: String, color: NSColor) {
-        label.stringValue = text
-        layer?.backgroundColor = color.cgColor
-    }
+struct QueueSnapshot: Equatable {
+    var appRunning = false
+    var queueState = "未运行"
+    var queueLength: Int?
+    var queueRank: Int?
+    var waitingTimeMinutes: Double?
+    var logError: String?
 }
 
-final class DashboardView: NSView {
-    private let titleLabel = makeLabel(size: 22, weight: .bold, color: hexColor(0x111827))
-    private let appPill = StatusPill(frame: NSRect(x: 0, y: 0, width: 126, height: 30))
-    private let queueState = makeLabel(size: 30, weight: .bold, color: hexColor(0x111827))
-    private let queueDetail = makeLabel(size: 14, weight: .regular, color: hexColor(0x6B7280))
+@MainActor
+final class QueueStatusStore: ObservableObject {
+    @Published var snapshot = QueueSnapshot()
 
-    private let rankTitle = makeLabel(size: 12, weight: .medium, color: hexColor(0x6B7280))
-    private let rankValue = makeLabel(size: 26, weight: .bold, color: hexColor(0x111827), alignment: .center)
-    private let lengthTitle = makeLabel(size: 12, weight: .medium, color: hexColor(0x6B7280))
-    private let lengthValue = makeLabel(size: 26, weight: .bold, color: hexColor(0x111827), alignment: .center)
-    private let waitTitle = makeLabel(size: 12, weight: .medium, color: hexColor(0x6B7280))
-    private let waitValue = makeLabel(size: 26, weight: .bold, color: hexColor(0x111827), alignment: .center)
+    private var refreshTimer: Timer?
+    private let configuredStateURL: URL?
 
-    private let networkTitle = makeLabel(size: 12, weight: .medium, color: hexColor(0x6B7280))
-    private let networkValue = makeLabel(size: 18, weight: .semibold, color: hexColor(0x111827))
-    private let gatewayValue = makeLabel(size: 13, weight: .regular, color: hexColor(0x6B7280))
-
-    private let alertTitle = makeLabel(size: 12, weight: .medium, color: hexColor(0x6B7280))
-    private let alertValue = makeLabel(size: 14, weight: .regular, color: hexColor(0x111827))
-    private let updatedValue = makeLabel(size: 13, weight: .regular, color: hexColor(0x9CA3AF), alignment: .right)
-
-    private let formatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
-        return formatter
-    }()
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        wantsLayer = true
-        layer?.backgroundColor = hexColor(0xF3F6F9).cgColor
-        buildLayout()
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    private func buildLayout() {
-        titleLabel.stringValue = "云·绝区零排队监测"
-        titleLabel.frame = NSRect(x: 24, y: 452, width: 300, height: 34)
-        addSubview(titleLabel)
-
-        appPill.frame = NSRect(x: 310, y: 454, width: 126, height: 30)
-        addSubview(appPill)
-
-        let queueCard = CardView(frame: NSRect(x: 20, y: 360, width: 420, height: 80), fill: .white)
-        addSubview(queueCard)
-        queueState.frame = NSRect(x: 36, y: 30, width: 250, height: 38)
-        queueCard.addSubview(queueState)
-        queueDetail.frame = NSRect(x: 36, y: 6, width: 388, height: 20)
-        queueCard.addSubview(queueDetail)
-
-        let rankCard = CardView(frame: NSRect(x: 20, y: 268, width: 132, height: 84), fill: .white)
-        let lengthCard = CardView(frame: NSRect(x: 164, y: 268, width: 132, height: 84), fill: .white)
-        let waitCard = CardView(frame: NSRect(x: 308, y: 268, width: 132, height: 84), fill: .white)
-        addSubview(rankCard)
-        addSubview(lengthCard)
-        addSubview(waitCard)
-
-        rankTitle.stringValue = "前方人数"
-        rankTitle.frame = NSRect(x: 16, y: 58, width: 100, height: 16)
-        rankValue.frame = NSRect(x: 16, y: 20, width: 100, height: 32)
-        rankCard.addSubview(rankTitle)
-        rankCard.addSubview(rankValue)
-
-        lengthTitle.stringValue = "总排队人数"
-        lengthTitle.frame = NSRect(x: 16, y: 58, width: 100, height: 16)
-        lengthValue.frame = NSRect(x: 16, y: 20, width: 100, height: 32)
-        lengthCard.addSubview(lengthTitle)
-        lengthCard.addSubview(lengthValue)
-
-        waitTitle.stringValue = "预计等待"
-        waitTitle.frame = NSRect(x: 16, y: 58, width: 100, height: 16)
-        waitValue.frame = NSRect(x: 16, y: 20, width: 100, height: 32)
-        waitCard.addSubview(waitTitle)
-        waitCard.addSubview(waitValue)
-
-        let networkCard = CardView(frame: NSRect(x: 20, y: 178, width: 420, height: 78), fill: .white)
-        addSubview(networkCard)
-        networkTitle.stringValue = "当前网络"
-        networkTitle.frame = NSRect(x: 16, y: 54, width: 388, height: 16)
-        networkValue.frame = NSRect(x: 16, y: 24, width: 220, height: 24)
-        gatewayValue.frame = NSRect(x: 230, y: 24, width: 174, height: 20)
-        networkCard.addSubview(networkTitle)
-        networkCard.addSubview(networkValue)
-        networkCard.addSubview(gatewayValue)
-
-        let alertCard = CardView(frame: NSRect(x: 20, y: 88, width: 420, height: 78), fill: .white)
-        addSubview(alertCard)
-        alertTitle.stringValue = "提醒状态"
-        alertTitle.frame = NSRect(x: 16, y: 54, width: 220, height: 16)
-        alertValue.frame = NSRect(x: 16, y: 24, width: 260, height: 20)
-        updatedValue.frame = NSRect(x: 280, y: 24, width: 124, height: 18)
-        alertCard.addSubview(alertTitle)
-        alertCard.addSubview(alertValue)
-        alertCard.addSubview(updatedValue)
-    }
-
-    func update(with status: [String: Any]?) {
-        guard let status = status else {
-            appPill.set(text: "未运行", color: hexColor(0x9CA3AF))
-            queueState.stringValue = "等待数据"
-            queueDetail.stringValue = "后台程序尚未写入状态"
-            rankValue.stringValue = "—"
-            lengthValue.stringValue = "—"
-            waitValue.stringValue = "—"
-            networkValue.stringValue = "尚未获取"
-            gatewayValue.stringValue = ""
-            alertValue.stringValue = "等待排队"
-            updatedValue.stringValue = ""
-            return
-        }
-
-        let appRunning = status["app_running"] as? Bool ?? false
-        appPill.set(text: appRunning ? "运行中" : "未运行", color: appRunning ? hexColor(0x10B981) : hexColor(0x9CA3AF))
-
-        let state = status["queue_state"] as? String ?? "未知"
-        queueState.stringValue = state
-        switch state {
-        case "排队中":
-            queueState.textColor = hexColor(0xD97706)
-            queueDetail.stringValue = "正在排队，耐心等待进入"
-        case "排队成功":
-            queueState.textColor = hexColor(0x059669)
-            queueDetail.stringValue = "已进入游戏，可以开始游玩"
-        case "等待排队日志":
-            queueState.textColor = hexColor(0x2563EB)
-            queueDetail.stringValue = "等待客户端写入排队信息"
-        default:
-            queueState.textColor = hexColor(0x111827)
-            queueDetail.stringValue = "当前没有排队任务"
-        }
-
-        let queue = (status["last_queue"] as? [String: Any]) ?? [:]
-        rankValue.stringValue = displayInt(queue["queue_rank"])
-        lengthValue.stringValue = displayInt(queue["queue_length"])
-        waitValue.stringValue = displayMinutes(queue["waiting_time_min"])
-
-        if let network = status["current_network"] as? [String: Any] {
-            let hotspot = network["hotspot"] as? Bool ?? false
-            networkValue.stringValue = hotspot ? "手机热点" : "Wi-Fi / 其他网络"
-            networkValue.textColor = hotspot ? hexColor(0x059669) : hexColor(0x2563EB)
-            gatewayValue.stringValue = "网关 \(network["gateway"] as? String ?? "—")"
+    init() {
+        if let index = CommandLine.arguments.firstIndex(of: "--state-file"),
+           index + 1 < CommandLine.arguments.count {
+            configuredStateURL = URL(fileURLWithPath: CommandLine.arguments[index + 1]).standardizedFileURL
         } else {
-            networkValue.stringValue = "尚未获取"
-            networkValue.textColor = hexColor(0x6B7280)
-            gatewayValue.stringValue = ""
-        }
-
-        if let alert = status["last_alert"] as? [String: Any] {
-            let reason = alert["reason"] as? String ?? ""
-            if reason == "queue_success_on_hotspot" {
-                alertValue.stringValue = "排队成功，已播放提醒声音"
-                alertValue.textColor = hexColor(0x059669)
-            } else if reason == "queue_success_but_not_hotspot" {
-                alertValue.stringValue = "排队成功，非热点未播放声音"
-                alertValue.textColor = hexColor(0x6B7280)
-            } else {
-                alertValue.stringValue = "排队成功，已提醒"
-                alertValue.textColor = hexColor(0x059669)
-            }
-        } else {
-            alertValue.stringValue = "等待排队成功"
-            alertValue.textColor = hexColor(0x6B7280)
-        }
-
-        if let updated = status["updated_at"] as? Double {
-            updatedValue.stringValue = formatter.string(from: Date(timeIntervalSince1970: updated))
-        } else {
-            updatedValue.stringValue = ""
+            configuredStateURL = nil
         }
     }
 
-    private func displayInt(_ value: Any?) -> String {
-        if let number = value as? NSNumber {
-            return number.stringValue
+    private var stateURL: URL {
+        if let configuredStateURL {
+            return configuredStateURL
         }
-        if let text = value as? String {
-            return text
-        }
-        return "—"
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("CloudZZZQueueMonitor", isDirectory: true)
+            .appendingPathComponent("state", isDirectory: true)
+            .appendingPathComponent("status.json")
     }
 
-    private func displayMinutes(_ value: Any?) -> String {
-        if let number = value as? NSNumber {
-            return String(format: "%.1f 分", number.doubleValue)
-        }
-        if let text = value as? String, let number = Double(text) {
-            return String(format: "%.1f 分", number)
-        }
-        return "—"
+    func start() {
+        refresh()
+        let timer = Timer(timeInterval: 0.5, target: self, selector: #selector(refreshTimerFired), userInfo: nil, repeats: true)
+        refreshTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    func stop() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+    }
+
+    @objc private func refreshTimerFired() {
+        refresh()
+    }
+
+    func refresh() {
+        guard let data = try? Data(contentsOf: stateURL),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return }
+
+        let queue = object["last_queue"] as? [String: Any] ?? [:]
+        snapshot = QueueSnapshot(
+            appRunning: object["app_running"] as? Bool ?? false,
+            queueState: object["queue_state"] as? String ?? "未知",
+            queueLength: intValue(queue["queue_length"]),
+            queueRank: intValue(queue["queue_rank"]),
+            waitingTimeMinutes: doubleValue(queue["waiting_time_min"]),
+            logError: object["log_error"] as? String
+        )
+    }
+
+    private func intValue(_ value: Any?) -> Int? {
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
+    }
+
+    private func doubleValue(_ value: Any?) -> Double? {
+        if let value = value as? NSNumber { return value.doubleValue }
+        if let value = value as? String { return Double(value) }
+        return nil
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var window: NSWindow?
-    private var dashboard: DashboardView?
-    private var timer: Timer?
-    private var statusURL: URL?
+@MainActor
+final class QueueMonitorCoreController {
+    private var process: Process?
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        statusURL = locateStatusFile()
+    func start(externalCore: Bool) {
+        guard !externalCore else { return }
+        guard process == nil,
+              let executableURL = Bundle.main.url(forResource: "CloudZZZQueueMonitorCore", withExtension: nil)
+        else { return }
 
-        let contentRect = NSRect(x: 0, y: 0, width: 460, height: 500)
-        let window = NSWindow(
-            contentRect: contentRect,
-            styleMask: [.titled, .closable, .miniaturizable],
+        let process = Process()
+        process.executableURL = executableURL
+        process.arguments = ["--headless"]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        process.terminationHandler = { [weak self] _ in
+            Task { @MainActor in self?.process = nil }
+        }
+
+        do {
+            try process.run()
+            self.process = process
+        } catch {
+            self.process = nil
+        }
+    }
+
+    func stop() {
+        guard let process else { return }
+        if process.isRunning { process.terminate() }
+        self.process = nil
+    }
+}
+
+@MainActor
+final class QueueIslandLayoutModel: ObservableObject {
+    @Published var isAttachedToTokenLens = false
+}
+
+@MainActor
+final class QueueIslandPanelController: NSObject {
+    private let panelSize = NSSize(width: 138, height: 33.5)
+    // TokenLens centers a 430pt design canvas, while its compact black view is
+    // only 358pt wide.  Its visible left edge therefore sits 36pt left of the
+    // compact view's frame origin.
+    private let tokenLensCompactDesignWidth: CGFloat = 430
+    // Keep a two-point overlap over TokenLens's left hairline. This remains
+    // invisible to its content while preventing a compositor seam at Retina scale.
+    private let seamOverlap: CGFloat = 2
+    // Half a point is one physical pixel on the Retina menu bar. Smaller offsets
+    // are rounded away by the compositor and leave a visible top seam.
+    private let topOverscan: CGFloat = 0.5
+
+    private let store: QueueStatusStore
+    private let layoutModel = QueueIslandLayoutModel()
+    private let panel: TopPinnedPanel
+    private var positionTimer: Timer?
+
+    init(store: QueueStatusStore) {
+        self.store = store
+        panel = TopPinnedPanel(
+            contentRect: NSRect(origin: .zero, size: panelSize),
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
-        window.title = "云·绝区零排队监测"
-        window.isReleasedWhenClosed = false
-        window.setContentSize(contentRect.size)
-        window.collectionBehavior = [.canJoinAllSpaces]
+        super.init()
 
-        let dashboard = DashboardView(frame: NSRect(origin: .zero, size: contentRect.size))
-        window.contentView = dashboard
-        self.window = window
-        self.dashboard = dashboard
-
-        window.center()
-        window.orderFrontRegardless()
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-
-        refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.refresh()
-        }
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        // The queue island covers TokenLens's left border at the shared seam.
+        panel.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
+        panel.isFloatingPanel = true
+        panel.hidesOnDeactivate = false
+        panel.isReleasedWhenClosed = false
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        panel.contentView = NSHostingView(
+            rootView: QueueIslandView(store: store, layoutModel: layoutModel, width: panelSize.width)
+        )
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+    func start() {
+        refreshPosition()
+
+        let timer = Timer(timeInterval: 1, target: self, selector: #selector(refreshPosition), userInfo: nil, repeats: true)
+        positionTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
-    private func locateStatusFile() -> URL? {
-        let executable = URL(fileURLWithPath: CommandLine.arguments[0])
-        var directory = executable.deletingLastPathComponent()
-        for _ in 0..<8 {
-            let candidate = directory.appendingPathComponent("state/status.json")
-            if FileManager.default.fileExists(atPath: candidate.path) {
-                return candidate
-            }
-            directory = directory.deletingLastPathComponent()
-        }
-        return URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent("state/status.json")
+    func stop() {
+        positionTimer?.invalidate()
+        positionTimer = nil
+        panel.orderOut(nil)
     }
 
-    private func refresh() {
-        guard let url = statusURL else { return }
-        guard let data = try? Data(contentsOf: url),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            dashboard?.update(with: nil)
+    @objc private func refreshPosition() {
+        // The monitor core follows the CloudGame process and writes this flag.
+        // Keep the island hidden until the game is actually running.
+        guard store.snapshot.appRunning else {
+            panel.orderOut(nil)
             return
         }
-        dashboard?.update(with: object)
+
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        let tokenLensRunning = NSWorkspace.shared.runningApplications.contains(where: isTokenLens)
+        layoutModel.isAttachedToTokenLens = tokenLensRunning
+        let x: CGFloat
+
+        if tokenLensRunning {
+            // Keep queue information on the left and attach its right edge to
+            // TokenLens's visible left edge, leaving its quota content on the right.
+            x = screen.frame.midX - tokenLensCompactDesignWidth / 2
+                - panelSize.width + seamOverlap
+        } else {
+            // Match TokenLens's own compact-island origin instead of placing the
+            // small panel under the physical notch at the screen's absolute center.
+            x = screen.frame.midX - tokenLensCompactDesignWidth / 2
+        }
+
+        panel.setFrame(
+            NSRect(
+                x: x,
+                y: screen.frame.maxY - panelSize.height + topOverscan,
+                width: panelSize.width,
+                height: panelSize.height
+            ),
+            display: true
+        )
+        panel.orderFrontRegardless()
+    }
+
+    private func isTokenLens(_ application: NSRunningApplication) -> Bool {
+        application.bundleIdentifier == "cn.liuli.tokenlens"
+            || application.localizedName == "TokenLens"
     }
 }
 
-let app = NSApplication.shared
-let delegate = AppDelegate()
-app.delegate = delegate
-app.setActivationPolicy(.regular)
-app.run()
+private struct QueueIslandView: View {
+    @ObservedObject var store: QueueStatusStore
+    @ObservedObject var layoutModel: QueueIslandLayoutModel
+    let width: CGFloat
+
+    var body: some View {
+        ZStack {
+            islandShape
+                .fill(Color.black)
+                .overlay {
+                    if !layoutModel.isAttachedToTokenLens {
+                        islandShape.strokeBorder(Color.white.opacity(0.14), lineWidth: 0.7)
+                    }
+                }
+
+            HStack(spacing: 8) {
+                Image(systemName: "gamecontroller.fill")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white)
+
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(queueText)
+                        .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Text(timeText)
+                        .font(.system(size: 8, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.52))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 13)
+        }
+        .frame(width: width, height: 33.5)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("云绝区零，\(queueText)，\(timeText)")
+    }
+
+    private var islandShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 0,
+            bottomLeadingRadius: 16.75,
+            bottomTrailingRadius: layoutModel.isAttachedToTokenLens ? 0 : 16.75,
+            topTrailingRadius: 0,
+            style: .continuous
+        )
+    }
+
+    private var queueText: String {
+        let snapshot = store.snapshot
+        if snapshot.queueState == "排队成功" { return "已进入游戏" }
+        if let rank = snapshot.queueRank { return "前方 \(rank) 人" }
+        return snapshot.appRunning ? "等待排队" : "未运行"
+    }
+
+    private var timeText: String {
+        if let minutes = store.snapshot.waitingTimeMinutes {
+            return String(format: "预计 %.1f 分钟", minutes)
+        }
+        if store.snapshot.queueState == "排队成功" { return "排队完成" }
+        return store.snapshot.logError ?? "等待数据"
+    }
+}
+
+@MainActor
+final class QueueMonitorAppDelegate: NSObject, NSApplicationDelegate {
+    private let store = QueueStatusStore()
+    private let coreController = QueueMonitorCoreController()
+    private var islandController: QueueIslandPanelController?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+        coreController.start(externalCore: CommandLine.arguments.contains("--external-core"))
+        store.start()
+
+        let controller = QueueIslandPanelController(store: store)
+        islandController = controller
+        controller.start()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        islandController?.stop()
+        store.stop()
+        coreController.stop()
+    }
+}
+
+@main
+struct CloudZZZQueueMonitorApp: App {
+    @NSApplicationDelegateAdaptor(QueueMonitorAppDelegate.self) private var appDelegate
+
+    var body: some Scene {
+        Settings {
+            EmptyView()
+        }
+    }
+}

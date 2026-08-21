@@ -75,6 +75,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "sound_repeat": 3,
     "also_say": True,
     "require_hotspot": False,
+    "island_app_path": str(PROJECT_DIR / "云绝区零排队提醒.app"),
 }
 
 
@@ -88,6 +89,51 @@ def load_config(path: pathlib.Path) -> dict[str, Any]:
         except (OSError, json.JSONDecodeError) as exc:
             logging.getLogger("guard").warning("读取配置失败，使用默认配置: %s", exc)
     return cfg
+
+
+def launch_island_app(cfg: dict[str, Any], log: logging.Logger) -> None:
+    """Launch the UI only while CloudGame is running.
+
+    The LaunchAgent remains the lightweight process watcher. The native island
+    receives --external-core so it does not start a second monitor process.
+    """
+    if sys.platform != "darwin":
+        return
+    app_path = pathlib.Path(str(cfg.get("island_app_path") or "")).expanduser()
+    if not app_path.exists():
+        log.warning("未找到绝区零灵动岛 App：%s", app_path)
+        return
+    result = run_cmd(
+        [
+            "open",
+            "-g",
+            "-a",
+            str(app_path),
+            "--args",
+            "--external-core",
+            "--state-file",
+            str(STATE_FILE),
+        ],
+        timeout=5,
+    )
+    if result.returncode != 0:
+        log.warning("启动绝区零灵动岛失败：%s", result.stdout.strip())
+
+
+def stop_island_app(log: logging.Logger) -> None:
+    """Quit the native island when CloudGame exits."""
+    if sys.platform != "darwin":
+        return
+    result = run_cmd(
+        [
+            "osascript",
+            "-e",
+            'tell application id "com.liuli.cloud-zzz-queue-monitor" to quit',
+        ],
+        timeout=5,
+    )
+    if result.returncode != 0 and "not running" not in result.stdout.lower():
+        log.debug("关闭绝区零灵动岛时返回：%s", result.stdout.strip())
 
 
 def setup_logging() -> None:
@@ -470,6 +516,7 @@ def run_monitor(cfg: dict[str, Any]) -> int:
     last_id: int | None = None
     alerted = False
     consecutive_errors = 0
+    island_launched = False
     state: dict[str, Any] = {
         "app_running": False,
         "queue_state": "未运行",
@@ -487,6 +534,10 @@ def run_monitor(cfg: dict[str, Any]) -> int:
         alerted = False
 
     def stop_requested(_signum: int, _frame: Any) -> None:
+        nonlocal island_launched
+        if island_launched:
+            stop_island_app(log)
+            island_launched = False
         raise SystemExit(0)
 
     signal.signal(signal.SIGTERM, stop_requested)
@@ -502,6 +553,8 @@ def run_monitor(cfg: dict[str, Any]) -> int:
         if app_running and not running:
             log.info("检测到云·绝区零已启动，开始监测排队状态。")
             running = True
+            launch_island_app(cfg, log)
+            island_launched = True
             reset_session()
             state.update(
                 {
@@ -521,6 +574,9 @@ def run_monitor(cfg: dict[str, Any]) -> int:
         if not app_running and running:
             log.info("云·绝区零已关闭，停止排队监测。")
             running = False
+            if island_launched:
+                stop_island_app(log)
+                island_launched = False
             reset_session()
             state.update(
                 {

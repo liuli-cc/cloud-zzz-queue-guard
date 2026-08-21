@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import argparse
 import logging
 import os
 import pathlib
@@ -815,6 +816,14 @@ def make_window(shared: dict[str, Any], ui_queue: "queue.Queue[dict[str, Any]]")
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="云·绝区零排队监测")
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="仅运行后台监测，不显示 Tk 窗口；供 macOS 原生灵动岛使用",
+    )
+    args = parser.parse_args()
+
     log = setup_logging()
     cfg = load_config()
     shared: dict[str, Any] = {
@@ -828,6 +837,19 @@ def main() -> int:
     }
     ui_queue: "queue.Queue[dict[str, Any]]" = queue.Queue()
     stop_event = threading.Event()
+
+    if args.headless:
+        thread = threading.Thread(
+            target=monitor_loop,
+            args=(cfg, shared, ui_queue, stop_event),
+            daemon=False,
+        )
+        thread.start()
+        try:
+            thread.join()
+        except KeyboardInterrupt:
+            stop_event.set()
+        return 0
 
     if tk is None:
         log.error("当前 Python 环境没有 Tkinter，无法显示窗口。")

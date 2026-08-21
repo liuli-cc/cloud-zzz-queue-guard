@@ -6,4 +6,5 @@ state/
 云绝区零排队提醒.app/
 build/
 dist/
+.build-window/
 *.spec

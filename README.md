@@ -15,7 +15,9 @@
 1. 下载 `CloudZZZQueueMonitor-macOS.zip`。
 2. 解压后把 `CloudZZZQueueMonitor.app` 拖到“应用程序”文件夹。
 3. 首次打开如果被 macOS 拦截，右键点击 App，选择“打开”，再点一次“打开”。
-4. 打开云·绝区零后，排队窗口会自动显示排队人数和预计等待时间。
+4. 在源码目录执行一次 `./install.sh`，安装 macOS 后台进程监测器；之后云·绝区零启动时自动拉起 App，退出时自动关闭 App。屏幕顶部只显示前方排队人数和预计等待时间。
+
+如果 Codex 的 TokenLens 灵动岛同时运行，绝区零灵动岛会自动放在 Codex 岛左侧；如果 Codex 未运行，则显示在屏幕顶部中央。
 
 macOS 的日志和配置保存在：
 
@@ -53,4 +55,4 @@ Windows 的日志和配置默认保存在 EXE 同目录；如果该目录不可�
 
 ## 源码方式使用
 
-仓库里的 `cloud_zzz_queue_guard.py`、`QueueWindow.swift` 相关源码主要供开发使用。打包后的桌面程序由 `cloud_zzz_queue_guard_gui.py` 构建，GitHub Actions 会自动生成 macOS App 和 Windows EXE。
+仓库里的 `cloud_zzz_queue_guard.py`、`QueueWindow.swift` 相关源码主要供开发使用。Windows 版本仍由 `cloud_zzz_queue_guard_gui.py` 提供窗口；macOS 发布包使用原生 Swift 灵动岛，并在 App 内携带后台监测核心。GitHub Actions 会自动生成 macOS App 和 Windows EXE。
