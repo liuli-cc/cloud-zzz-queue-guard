@@ -53,12 +53,27 @@ jobs:
       - name: Install PyInstaller
         run: pip install pyinstaller
 
-      - name: Build macOS app
-        run: pyinstaller --windowed --onedir --name CloudZZZQueueMonitor cloud_zzz_queue_guard_gui.py
+      - name: Build native macOS Dynamic Island app
+        run: |
+          mkdir -p build/CloudZZZQueueMonitor.app/Contents/MacOS build/CloudZZZQueueMonitor.app/Contents/Resources
+          swiftc -parse-as-library -O QueueWindow.swift \
+            -o build/CloudZZZQueueMonitor.app/Contents/MacOS/CloudZZZQueueMonitor \
+            -framework Cocoa \
+            -framework SwiftUI
+          cp QueueWindow-Info.plist build/CloudZZZQueueMonitor.app/Contents/Info.plist
+
+      - name: Build bundled macOS monitor core
+        run: |
+          pyinstaller --clean --onefile \
+            --name CloudZZZQueueMonitorCore \
+            cloud_zzz_queue_guard_gui.py
+          cp dist/CloudZZZQueueMonitorCore build/CloudZZZQueueMonitor.app/Contents/Resources/CloudZZZQueueMonitorCore
+          chmod +x build/CloudZZZQueueMonitor.app/Contents/MacOS/CloudZZZQueueMonitor
+          chmod +x build/CloudZZZQueueMonitor.app/Contents/Resources/CloudZZZQueueMonitorCore
+          codesign --force --deep --sign - build/CloudZZZQueueMonitor.app
 
       - name: Package app zip
-        run: |
-          ditto -c -k --sequesterRsrc --keepParent dist/CloudZZZQueueMonitor.app dist/CloudZZZQueueMonitor-macOS.zip
+        run: ditto -c -k --sequesterRsrc --keepParent build/CloudZZZQueueMonitor.app dist/CloudZZZQueueMonitor-macOS.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

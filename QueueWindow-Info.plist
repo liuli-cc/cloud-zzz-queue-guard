@@ -5,17 +5,17 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>zh_CN</string>
     <key>CFBundleExecutable</key>
-    <string>CloudZZZQueueWindow</string>
+    <string>CloudZZZQueueMonitor</string>
     <key>CFBundleIdentifier</key>
-    <string>com.liuli.cloud-zzz-queue-window</string>
+    <string>com.liuli.cloud-zzz-queue-monitor</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>云绝区零排队监测</string>
+    <string>云绝区零排队灵动岛</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>1.2.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
