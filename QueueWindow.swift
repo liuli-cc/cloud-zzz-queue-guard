@@ -131,7 +131,12 @@ final class QueueIslandLayoutModel: ObservableObject {
 @MainActor
 final class QueueIslandPanelController: NSObject {
     private let panelSize = NSSize(width: 238, height: 33.5)
-    private let tokenLensIslandSize = NSSize(width: 358, height: 33.5)
+    // TokenLens centers a 430pt design canvas, while its compact black view is
+    // only 358pt wide.  Its visible left edge therefore sits 36pt left of the
+    // compact view's frame origin.
+    private let tokenLensCompactDesignWidth: CGFloat = 430
+    // Slightly overscan the top edge to remove the sub-pixel seam on Retina displays.
+    private let topOverscan: CGFloat = 0.2
 
     private let store: QueueStatusStore
     private let layoutModel = QueueIslandLayoutModel()
@@ -187,9 +192,9 @@ final class QueueIslandPanelController: NSObject {
         let x: CGFloat
 
         if tokenLensRunning {
-            // TokenLens uses a 358 x 33.5 compact panel centered on the notch.
-            // Touch its left edge directly so the two black islands form one seam.
-            x = screen.frame.midX - tokenLensIslandSize.width / 2 - panelSize.width
+            // Anchor to TokenLens's visual left edge so this island attaches to
+            // it without covering the Codex content.
+            x = screen.frame.midX - tokenLensCompactDesignWidth / 2 - panelSize.width
         } else {
             x = screen.frame.midX - panelSize.width / 2
         }
@@ -197,7 +202,7 @@ final class QueueIslandPanelController: NSObject {
         panel.setFrame(
             NSRect(
                 x: x,
-                y: screen.frame.maxY - panelSize.height,
+                y: screen.frame.maxY - panelSize.height + topOverscan,
                 width: panelSize.width,
                 height: panelSize.height
             ),
