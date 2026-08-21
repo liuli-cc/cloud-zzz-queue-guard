@@ -103,12 +103,17 @@ final class QueueMonitorCoreController {
 }
 
 @MainActor
+final class QueueIslandLayoutModel: ObservableObject {
+    @Published var isAttachedToTokenLens = false
+}
+
+@MainActor
 final class QueueIslandPanelController: NSObject {
-    private let panelSize = NSSize(width: 238, height: 34)
-    private let codexIslandSize = NSSize(width: 358, height: 33.5)
-    private let islandGap: CGFloat = 8
+    private let panelSize = NSSize(width: 238, height: 33.5)
+    private let tokenLensIslandSize = NSSize(width: 358, height: 33.5)
 
     private let store: QueueStatusStore
+    private let layoutModel = QueueIslandLayoutModel()
     private let panel: NSPanel
     private var positionTimer: Timer?
 
@@ -130,7 +135,7 @@ final class QueueIslandPanelController: NSObject {
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-        panel.contentView = NSHostingView(rootView: QueueIslandView(store: store))
+        panel.contentView = NSHostingView(rootView: QueueIslandView(store: store, layoutModel: layoutModel))
     }
 
     func start() {
@@ -151,10 +156,13 @@ final class QueueIslandPanelController: NSObject {
     @objc private func refreshPosition() {
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         let tokenLensRunning = NSWorkspace.shared.runningApplications.contains(where: isTokenLens)
+        layoutModel.isAttachedToTokenLens = tokenLensRunning
         let x: CGFloat
 
         if tokenLensRunning {
-            x = screen.frame.midX - codexIslandSize.width / 2 - islandGap - panelSize.width
+            // TokenLens uses a 358 x 33.5 compact panel centered on the notch.
+            // Touch its left edge directly so the two black islands form one seam.
+            x = screen.frame.midX - tokenLensIslandSize.width / 2 - panelSize.width
         } else {
             x = screen.frame.midX - panelSize.width / 2
         }
@@ -178,6 +186,7 @@ final class QueueIslandPanelController: NSObject {
 
 private struct QueueIslandView: View {
     @ObservedObject var store: QueueStatusStore
+    @ObservedObject var layoutModel: QueueIslandLayoutModel
 
     var body: some View {
         ZStack {
@@ -207,7 +216,7 @@ private struct QueueIslandView: View {
             }
             .padding(.horizontal, 13)
         }
-        .frame(width: 238, height: 34)
+        .frame(width: 238, height: 33.5)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("云绝区零，\(queueText)，\(timeText)")
     }
@@ -215,8 +224,8 @@ private struct QueueIslandView: View {
     private var islandShape: UnevenRoundedRectangle {
         UnevenRoundedRectangle(
             topLeadingRadius: 0,
-            bottomLeadingRadius: 17,
-            bottomTrailingRadius: 17,
+            bottomLeadingRadius: 16.75,
+            bottomTrailingRadius: layoutModel.isAttachedToTokenLens ? 0 : 16.75,
             topTrailingRadius: 0,
             style: .continuous
         )
@@ -225,7 +234,6 @@ private struct QueueIslandView: View {
     private var queueText: String {
         let snapshot = store.snapshot
         if snapshot.queueState == "排队成功" { return "已进入游戏" }
-        if let length = snapshot.queueLength { return "排队 \(length) 人" }
         if let rank = snapshot.queueRank { return "前方 \(rank) 人" }
         return snapshot.appRunning ? "等待排队" : "未运行"
     }
