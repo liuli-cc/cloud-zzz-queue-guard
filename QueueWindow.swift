@@ -135,8 +135,9 @@ final class QueueIslandPanelController: NSObject {
     // only 358pt wide.  Its visible left edge therefore sits 36pt left of the
     // compact view's frame origin.
     private let tokenLensCompactDesignWidth: CGFloat = 430
-    // The overlap hides the two independent panels' hairline borders at the join.
-    private let seamOverlap: CGFloat = 0.7
+    // Keep a two-point overlap over TokenLens's left hairline. This remains
+    // invisible to its content while preventing a compositor seam at Retina scale.
+    private let seamOverlap: CGFloat = 2
     // Half a point is one physical pixel on the Retina menu bar. Smaller offsets
     // are rounded away by the compositor and leave a visible top seam.
     private let topOverscan: CGFloat = 0.5
@@ -159,7 +160,8 @@ final class QueueIslandPanelController: NSObject {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        panel.level = .statusBar
+        // The queue island covers TokenLens's left border at the shared seam.
+        panel.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
