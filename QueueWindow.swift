@@ -2,6 +2,13 @@ import AppKit
 import Foundation
 import SwiftUI
 
+@MainActor
+private final class TopPinnedPanel: NSPanel {
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        frameRect
+    }
+}
+
 struct QueueSnapshot: Equatable {
     var appRunning = false
     var queueState = "未运行"
@@ -128,12 +135,12 @@ final class QueueIslandPanelController: NSObject {
 
     private let store: QueueStatusStore
     private let layoutModel = QueueIslandLayoutModel()
-    private let panel: NSPanel
+    private let panel: TopPinnedPanel
     private var positionTimer: Timer?
 
     init(store: QueueStatusStore) {
         self.store = store
-        panel = NSPanel(
+        panel = TopPinnedPanel(
             contentRect: NSRect(origin: .zero, size: panelSize),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
