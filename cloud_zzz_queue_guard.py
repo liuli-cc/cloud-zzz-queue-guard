@@ -104,7 +104,7 @@ def launch_island_app(cfg: dict[str, Any], log: logging.Logger) -> None:
         log.warning("未找到绝区零灵动岛 App：%s", app_path)
         return
     result = run_cmd(
-        ["open", "-g", "-j", "-a", str(app_path), "--args", "--external-core"],
+        ["open", "-g", "-a", str(app_path), "--args", "--external-core"],
         timeout=5,
     )
     if result.returncode != 0:
