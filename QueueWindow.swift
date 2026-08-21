@@ -135,7 +135,6 @@ final class QueueIslandPanelController: NSObject {
     // only 358pt wide.  Its visible left edge therefore sits 36pt left of the
     // compact view's frame origin.
     private let tokenLensCompactDesignWidth: CGFloat = 430
-    private let tokenLensVisibleCompactWidth: CGFloat = 286
     // The overlap hides the two independent panels' hairline borders at the join.
     private let seamOverlap: CGFloat = 0.7
     // Half a point is one physical pixel on the Retina menu bar. Smaller offsets
@@ -198,10 +197,10 @@ final class QueueIslandPanelController: NSObject {
         let x: CGFloat
 
         if tokenLensRunning {
-            // Attach to TokenLens's visible right edge. Its compact drawing is
-            // shifted left within the 358pt host panel, so use its 286pt visible width.
+            // Keep queue information on the left and attach its right edge to
+            // TokenLens's visible left edge, leaving its quota content on the right.
             x = screen.frame.midX - tokenLensCompactDesignWidth / 2
-                + tokenLensVisibleCompactWidth - seamOverlap
+                - panelSize.width + seamOverlap
         } else {
             x = screen.frame.midX - panelSize.width / 2
         }
@@ -267,8 +266,8 @@ private struct QueueIslandView: View {
     private var islandShape: UnevenRoundedRectangle {
         UnevenRoundedRectangle(
             topLeadingRadius: 0,
-            bottomLeadingRadius: layoutModel.isAttachedToTokenLens ? 0 : 16.75,
-            bottomTrailingRadius: 16.75,
+            bottomLeadingRadius: 16.75,
+            bottomTrailingRadius: layoutModel.isAttachedToTokenLens ? 0 : 16.75,
             topTrailingRadius: 0,
             style: .continuous
         )
