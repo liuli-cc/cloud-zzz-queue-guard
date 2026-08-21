@@ -130,13 +130,17 @@ final class QueueIslandLayoutModel: ObservableObject {
 
 @MainActor
 final class QueueIslandPanelController: NSObject {
-    private let panelSize = NSSize(width: 238, height: 33.5)
+    private let panelSize = NSSize(width: 138, height: 33.5)
     // TokenLens centers a 430pt design canvas, while its compact black view is
     // only 358pt wide.  Its visible left edge therefore sits 36pt left of the
     // compact view's frame origin.
     private let tokenLensCompactDesignWidth: CGFloat = 430
-    // Slightly overscan the top edge to remove the sub-pixel seam on Retina displays.
-    private let topOverscan: CGFloat = 0.2
+    private let tokenLensVisibleCompactWidth: CGFloat = 286
+    // The overlap hides the two independent panels' hairline borders at the join.
+    private let seamOverlap: CGFloat = 0.7
+    // Half a point is one physical pixel on the Retina menu bar. Smaller offsets
+    // are rounded away by the compositor and leave a visible top seam.
+    private let topOverscan: CGFloat = 0.5
 
     private let store: QueueStatusStore
     private let layoutModel = QueueIslandLayoutModel()
@@ -161,7 +165,9 @@ final class QueueIslandPanelController: NSObject {
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-        panel.contentView = NSHostingView(rootView: QueueIslandView(store: store, layoutModel: layoutModel))
+        panel.contentView = NSHostingView(
+            rootView: QueueIslandView(store: store, layoutModel: layoutModel, width: panelSize.width)
+        )
     }
 
     func start() {
@@ -192,9 +198,10 @@ final class QueueIslandPanelController: NSObject {
         let x: CGFloat
 
         if tokenLensRunning {
-            // Anchor to TokenLens's visual left edge so this island attaches to
-            // it without covering the Codex content.
-            x = screen.frame.midX - tokenLensCompactDesignWidth / 2 - panelSize.width
+            // Attach to TokenLens's visible right edge. Its compact drawing is
+            // shifted left within the 358pt host panel, so use its 286pt visible width.
+            x = screen.frame.midX - tokenLensCompactDesignWidth / 2
+                + tokenLensVisibleCompactWidth - seamOverlap
         } else {
             x = screen.frame.midX - panelSize.width / 2
         }
@@ -220,13 +227,16 @@ final class QueueIslandPanelController: NSObject {
 private struct QueueIslandView: View {
     @ObservedObject var store: QueueStatusStore
     @ObservedObject var layoutModel: QueueIslandLayoutModel
+    let width: CGFloat
 
     var body: some View {
         ZStack {
             islandShape
                 .fill(Color.black)
                 .overlay {
-                    islandShape.strokeBorder(Color.white.opacity(0.14), lineWidth: 0.7)
+                    if !layoutModel.isAttachedToTokenLens {
+                        islandShape.strokeBorder(Color.white.opacity(0.14), lineWidth: 0.7)
+                    }
                 }
 
             HStack(spacing: 8) {
@@ -249,7 +259,7 @@ private struct QueueIslandView: View {
             }
             .padding(.horizontal, 13)
         }
-        .frame(width: 238, height: 33.5)
+        .frame(width: width, height: 33.5)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("云绝区零，\(queueText)，\(timeText)")
     }
@@ -257,8 +267,8 @@ private struct QueueIslandView: View {
     private var islandShape: UnevenRoundedRectangle {
         UnevenRoundedRectangle(
             topLeadingRadius: 0,
-            bottomLeadingRadius: 16.75,
-            bottomTrailingRadius: layoutModel.isAttachedToTokenLens ? 0 : 16.75,
+            bottomLeadingRadius: layoutModel.isAttachedToTokenLens ? 0 : 16.75,
+            bottomTrailingRadius: 16.75,
             topTrailingRadius: 0,
             style: .continuous
         )
