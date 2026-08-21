@@ -43,5 +43,6 @@
     "手机"
   ],
   "sound_repeat": 3,
-  "require_hotspot": false
+  "require_hotspot": false,
+  "island_app_path": "云绝区零排队提醒.app"
 }

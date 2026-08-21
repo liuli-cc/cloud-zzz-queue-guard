@@ -73,7 +73,8 @@ final class QueueStatusStore: ObservableObject {
 final class QueueMonitorCoreController {
     private var process: Process?
 
-    func start() {
+    func start(externalCore: Bool) {
+        guard !externalCore else { return }
         guard process == nil,
               let executableURL = Bundle.main.url(forResource: "CloudZZZQueueMonitorCore", withExtension: nil)
         else { return }
@@ -140,7 +141,6 @@ final class QueueIslandPanelController: NSObject {
 
     func start() {
         refreshPosition()
-        panel.orderFrontRegardless()
 
         let timer = Timer(timeInterval: 1, target: self, selector: #selector(refreshPosition), userInfo: nil, repeats: true)
         positionTimer = timer
@@ -154,6 +154,13 @@ final class QueueIslandPanelController: NSObject {
     }
 
     @objc private func refreshPosition() {
+        // The monitor core follows the CloudGame process and writes this flag.
+        // Keep the island hidden until the game is actually running.
+        guard store.snapshot.appRunning else {
+            panel.orderOut(nil)
+            return
+        }
+
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         let tokenLensRunning = NSWorkspace.shared.runningApplications.contains(where: isTokenLens)
         layoutModel.isAttachedToTokenLens = tokenLensRunning
@@ -176,6 +183,7 @@ final class QueueIslandPanelController: NSObject {
             ),
             display: true
         )
+        panel.orderFrontRegardless()
     }
 
     private func isTokenLens(_ application: NSRunningApplication) -> Bool {
@@ -255,7 +263,7 @@ final class QueueMonitorAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        coreController.start()
+        coreController.start(externalCore: CommandLine.arguments.contains("--external-core"))
         store.start()
 
         let controller = QueueIslandPanelController(store: store)

@@ -15,7 +15,7 @@
 1. 下载 `CloudZZZQueueMonitor-macOS.zip`。
 2. 解压后把 `CloudZZZQueueMonitor.app` 拖到“应用程序”文件夹。
 3. 首次打开如果被 macOS 拦截，右键点击 App，选择“打开”，再点一次“打开”。
-4. 打开云·绝区零后，屏幕顶部会显示黑白灵动岛，只显示前方排队人数和预计等待时间。
+4. 在源码目录执行一次 `./install.sh`，安装 macOS 后台进程监测器；之后云·绝区零启动时自动拉起 App，退出时自动关闭 App。屏幕顶部只显示前方排队人数和预计等待时间。
 
 如果 Codex 的 TokenLens 灵动岛同时运行，绝区零灵动岛会自动放在 Codex 岛左侧；如果 Codex 未运行，则显示在屏幕顶部中央。
 
