@@ -204,7 +204,9 @@ final class QueueIslandPanelController: NSObject {
             x = screen.frame.midX - tokenLensCompactDesignWidth / 2
                 - panelSize.width + seamOverlap
         } else {
-            x = screen.frame.midX - panelSize.width / 2
+            // Match TokenLens's own compact-island origin instead of placing the
+            // small panel under the physical notch at the screen's absolute center.
+            x = screen.frame.midX - tokenLensCompactDesignWidth / 2
         }
 
         panel.setFrame(
