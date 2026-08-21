@@ -112,6 +112,7 @@ final class QueueIslandLayoutModel: ObservableObject {
 final class QueueIslandPanelController: NSObject {
     private let panelSize = NSSize(width: 238, height: 33.5)
     private let tokenLensIslandSize = NSSize(width: 358, height: 33.5)
+    private let verticalOffset: CGFloat = 33.5
 
     private let store: QueueStatusStore
     private let layoutModel = QueueIslandLayoutModel()
@@ -177,7 +178,7 @@ final class QueueIslandPanelController: NSObject {
         panel.setFrame(
             NSRect(
                 x: x,
-                y: screen.frame.maxY - panelSize.height,
+                y: screen.frame.maxY - panelSize.height + verticalOffset,
                 width: panelSize.width,
                 height: panelSize.height
             ),
