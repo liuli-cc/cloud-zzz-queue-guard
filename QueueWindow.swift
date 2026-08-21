@@ -16,9 +16,22 @@ final class QueueStatusStore: ObservableObject {
     @Published var snapshot = QueueSnapshot()
 
     private var refreshTimer: Timer?
+    private let configuredStateURL: URL?
+
+    init() {
+        if let index = CommandLine.arguments.firstIndex(of: "--state-file"),
+           index + 1 < CommandLine.arguments.count {
+            configuredStateURL = URL(fileURLWithPath: CommandLine.arguments[index + 1]).standardizedFileURL
+        } else {
+            configuredStateURL = nil
+        }
+    }
 
     private var stateURL: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        if let configuredStateURL {
+            return configuredStateURL
+        }
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("CloudZZZQueueMonitor", isDirectory: true)
             .appendingPathComponent("state", isDirectory: true)
             .appendingPathComponent("status.json")
