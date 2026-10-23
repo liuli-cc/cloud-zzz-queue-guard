@@ -56,6 +56,32 @@ final class QueueStatusStore: ObservableObject {
         refreshTimer = nil
     }
 
+    func markGameStopped() {
+        var object: [String: Any] = [:]
+        if let data = try? Data(contentsOf: stateURL),
+           let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            object = existing
+        }
+        object["app_running"] = false
+        object["queue_state"] = "未运行"
+        object["last_queue"] = NSNull()
+        object["last_success"] = NSNull()
+        object["last_alert"] = NSNull()
+        object["log_error"] = NSNull()
+        object["updated_at"] = Date().timeIntervalSince1970
+
+        guard let data = try? JSONSerialization.data(
+            withJSONObject: object,
+            options: [.prettyPrinted, .sortedKeys]
+        ) else { return }
+        try? FileManager.default.createDirectory(
+            at: stateURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try? data.write(to: stateURL, options: .atomic)
+        snapshot = QueueSnapshot()
+    }
+
     @objc private func refreshTimerFired() {
         refresh()
     }
@@ -101,7 +127,10 @@ final class QueueMonitorCoreController {
 
         let process = Process()
         process.executableURL = executableURL
-        process.arguments = ["--headless"]
+        // The lifecycle bridge only launches this App while 云·绝区零 is
+        // running, so the bundled core can begin syncing immediately instead
+        // of relying on a second, less reliable process-name check.
+        process.arguments = ["--headless", "--assume-game-running"]
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         process.terminationHandler = { [weak self] _ in
@@ -241,6 +270,14 @@ private struct QueueIslandView: View {
                         islandShape.strokeBorder(Color.white.opacity(0.14), lineWidth: 0.7)
                     }
                 }
+                .overlay(alignment: .bottomTrailing) {
+                    if layoutModel.isAttachedToTokenLens {
+                        Rectangle()
+                            .fill(Color.black)
+                            .frame(width: 16.75, height: 16.75)
+                            .allowsHitTesting(false)
+                    }
+                }
 
             HStack(spacing: 8) {
                 Image(systemName: "gamecontroller.fill")
@@ -271,7 +308,7 @@ private struct QueueIslandView: View {
         UnevenRoundedRectangle(
             topLeadingRadius: 0,
             bottomLeadingRadius: 16.75,
-            bottomTrailingRadius: layoutModel.isAttachedToTokenLens ? 0 : 16.75,
+            bottomTrailingRadius: 16.75,
             topTrailingRadius: 0,
             style: .continuous
         )
@@ -311,6 +348,7 @@ final class QueueMonitorAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         islandController?.stop()
+        store.markGameStopped()
         store.stop()
         coreController.stop()
     }

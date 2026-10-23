@@ -3,28 +3,21 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.liuli.cloud-zzz-queue-guard</string>
+    <string>com.liuli.cloud-zzz-queue-monitor</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/bin/python3</string>
-        <string>__PROJECT_DIR__/cloud_zzz_queue_guard.py</string>
-        <string>--config</string>
-        <string>__PROJECT_DIR__/config.json</string>
+        <string>__BRIDGE_PATH__</string>
     </array>
-    <key>WorkingDirectory</key>
-    <string>__PROJECT_DIR__</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>ProcessType</key>
-    <string>Interactive</string>
+    <string>Background</string>
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
     <key>ThrottleInterval</key>
-    <integer>1</integer>
-    <key>AssociatedBundleIdentifiers</key>
-    <array>
-        <string>com.miHoYo.cloudgames.Nap</string>
-    </array>
+    <integer>2</integer>
     <key>StandardOutPath</key>
     <string>__PROJECT_DIR__/logs/guard.log</string>
     <key>StandardErrorPath</key>
