@@ -220,7 +220,11 @@ def discover_log_db() -> pathlib.Path | None:
             / "Library/Containers/com.miHoYo.cloudgames.Nap"
             / "Data/Library/Application Support/kibana/log.db"
         )
-        if known.exists() and has_plat_cloudgame_table(known):
+        # Return the well-known path directly. Validating it with SQLite here can
+        # hide macOS privacy failures as a misleading "database not found" state.
+        # The snapshot step below performs the real read and surfaces permission
+        # errors to the UI.
+        if known.exists():
             return known
         return None
 
@@ -303,6 +307,8 @@ def snapshot_log_db(source: pathlib.Path) -> pathlib.Path | None:
             if sidecar.exists():
                 shutil.copy2(sidecar, pathlib.Path(str(snapshot) + suffix))
         return snapshot
+    except PermissionError:
+        raise
     except OSError:
         return None
 
@@ -310,10 +316,11 @@ def snapshot_log_db(source: pathlib.Path) -> pathlib.Path | None:
 def query_new_rows(
     db_path: pathlib.Path,
     last_id: int | None,
-) -> tuple[int | None, list[tuple[int, float, str]]]:
+    initial_since: float,
+) -> tuple[int | None, list[tuple[int, float, str]], bool]:
     snapshot = snapshot_log_db(db_path)
     if snapshot is None:
-        return None, []
+        return None, [], False
     try:
         conn = sqlite3.connect(str(snapshot), timeout=3)
         try:
@@ -322,23 +329,28 @@ def query_new_rows(
                 "SELECT MAX(id) FROM plat_cloudgame"
             ).fetchone()[0]
             if current_max is None:
-                return 0, []
-            if last_id is None:
-                return int(current_max), []
-            if current_max < last_id:
-                return int(current_max), []
-            rows = conn.execute(
-                "SELECT id, createdAt, content FROM plat_cloudgame "
-                "WHERE id > ? ORDER BY id ASC",
-                (last_id,),
-            ).fetchall()
+                return 0, [], last_id is None
+
+            is_backfill = last_id is None or int(current_max) < last_id
+            if is_backfill:
+                rows = conn.execute(
+                    "SELECT id, createdAt, content FROM plat_cloudgame "
+                    "WHERE createdAt >= ? ORDER BY id ASC LIMIT 1024",
+                    (initial_since,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT id, createdAt, content FROM plat_cloudgame "
+                    "WHERE id > ? ORDER BY id ASC",
+                    (last_id,),
+                ).fetchall()
             return int(current_max), [
                 (int(r[0]), float(r[1]), str(r[2])) for r in rows
-            ]
+            ], is_backfill
         finally:
             conn.close()
     except sqlite3.Error:
-        return None, []
+        return None, [], False
 
 
 def to_int(value: Any) -> int | None:
@@ -361,21 +373,40 @@ def to_float(value: Any) -> float | None:
 
 def parse_http_info(http_info: str) -> dict[str, Any]:
     info: dict[str, Any] = {}
-    start = http_info.find("Value: ")
-    if start == -1:
+    candidates = [http_info.strip()]
+    marker = "Value:"
+    marker_index = http_info.find(marker)
+    if marker_index != -1:
+        candidates.insert(0, http_info[marker_index + len(marker) :].lstrip())
+
+    response: Any = None
+    decoder = json.JSONDecoder()
+    for candidate in candidates:
+        try:
+            response, _ = decoder.raw_decode(candidate)
+            break
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+    def find_queue_payload(value: Any) -> dict[str, Any] | None:
+        if isinstance(value, str):
+            try:
+                return find_queue_payload(json.loads(value))
+            except json.JSONDecodeError:
+                return None
+        if not isinstance(value, dict):
+            return None
+        if any(key in value for key in ("ticket_status", "queue_info", "finish_result")):
+            return value
+        for key in ("data", "body", "value", "response", "result"):
+            nested = find_queue_payload(value.get(key))
+            if nested is not None:
+                return nested
+        return None
+
+    data = find_queue_payload(response)
+    if data is None:
         return info
-    start += len("Value: ")
-    end = http_info.rfind(";\n}")
-    if end == -1:
-        end = len(http_info)
-    body = http_info[start:end].strip()
-    if not body.startswith("{"):
-        return info
-    try:
-        response = json.loads(body)
-    except json.JSONDecodeError:
-        return info
-    data = response.get("data") or {}
     queue_info = data.get("queue_info") or {}
     info.update(
         {
@@ -536,6 +567,7 @@ def monitor_loop(
     shared: dict[str, Any],
     ui_queue: "queue.Queue[dict[str, Any]]",
     stop_event: threading.Event,
+    assume_game_running: bool = False,
 ) -> None:
     log = logging.getLogger("queue_guard")
     running = False
@@ -543,10 +575,16 @@ def monitor_loop(
     alerted = False
     cached_db: pathlib.Path | None = None
     last_db_search = 0.0
+    session_started_at = time.time()
+
+    # Always replace an old state file on process startup. Without this write, a
+    # previous "running" snapshot can survive a crash or logout indefinitely.
+    write_state(shared)
+    ui_queue.put(dict(shared))
 
     while not stop_event.is_set():
         try:
-            app_running = is_cloud_game_running(cfg)
+            app_running = assume_game_running or is_cloud_game_running(cfg)
         except Exception:
             app_running = running
 
@@ -556,6 +594,7 @@ def monitor_loop(
             alerted = False
             cached_db = None
             last_db_search = 0.0
+            session_started_at = time.time()
             shared.update(
                 {
                     "app_running": True,
@@ -605,25 +644,44 @@ def monitor_loop(
                 db_path = None
             if db_path is None:
                 shared["log_error"] = "未找到云绝区零排队日志数据库"
+                write_state(shared)
                 ui_queue.put(dict(shared))
                 time.sleep(float(cfg.get("poll_interval_seconds", 1.0)))
                 continue
             cached_db = db_path
             shared["log_error"] = None
 
-            current_max, rows = query_new_rows(db_path, last_id)
+            backfill_since = max(session_started_at - 120.0, time.time() - 300.0)
+            current_max, rows, is_backfill = query_new_rows(
+                db_path,
+                last_id,
+                backfill_since,
+            )
             if current_max is not None:
-                if last_id is None:
-                    last_id = current_max
-                else:
-                    for row_id, _, content in rows:
-                        info = parse_queue_row(row_id, content, cfg)
-                        if info.get("queue_success"):
-                            shared["queue_state"] = "排队成功"
-                            shared["last_success"] = info
-                            summary = network_summary(cfg)
-                            shared["current_network"] = summary
-                            if not alerted:
+                if is_backfill:
+                    shared.update(
+                        {
+                            "queue_state": "等待排队日志",
+                            "last_queue": None,
+                            "last_success": None,
+                            "last_alert": None,
+                        }
+                    )
+                    alerted = False
+
+                for row_id, _, content in rows:
+                    info = parse_queue_row(row_id, content, cfg)
+                    if info.get("queue_success"):
+                        shared["queue_state"] = "排队成功"
+                        shared["last_success"] = info
+                        summary = network_summary(cfg)
+                        shared["current_network"] = summary
+                        if not alerted:
+                            if is_backfill:
+                                # Reconstruct the current state after a monitor
+                                # restart without replaying an old success alert.
+                                alerted = True
+                            else:
                                 if summary["hotspot"] or not cfg.get("require_hotspot", False):
                                     log.info("排队成功，播放提示音。")
                                     play_alert(cfg)
@@ -638,24 +696,28 @@ def monitor_loop(
                                         "reason": "queue_success_but_not_hotspot",
                                     }
                                 alerted = True
-                        elif info.get("queueing"):
-                            shared["queue_state"] = "排队中"
-                            if info.get("source") == "http" or shared.get("last_queue") is None:
-                                shared["last_queue"] = info
-                            alerted = False
-                            log.info(
-                                "排队中：rank=%s length=%s waiting_min=%s",
-                                info.get("queue_rank"),
-                                info.get("queue_length"),
-                                info.get("waiting_time_min"),
-                            )
-                    last_id = current_max
+                    elif info.get("queueing"):
+                        shared["queue_state"] = "排队中"
+                        if info.get("source") == "http" or shared.get("last_queue") is None:
+                            shared["last_queue"] = info
+                        alerted = False
+                        log.info(
+                            "排队中：rank=%s length=%s waiting_min=%s",
+                            info.get("queue_rank"),
+                            info.get("queue_length"),
+                            info.get("waiting_time_min"),
+                        )
+                last_id = current_max
                 shared["current_network"] = network_summary(cfg)
                 write_state(shared)
                 ui_queue.put(dict(shared))
         except Exception as exc:
             log.exception("读取排队日志失败")
-            shared["log_error"] = str(exc)
+            if isinstance(exc, PermissionError):
+                shared["log_error"] = "macOS 已阻止读取排队数据，请为排队提醒 App 开启完全磁盘访问权限"
+            else:
+                shared["log_error"] = str(exc)
+            write_state(shared)
             ui_queue.put(dict(shared))
 
         time.sleep(float(cfg.get("poll_interval_seconds", 1.0)))
@@ -822,6 +884,11 @@ def main() -> int:
         action="store_true",
         help="仅运行后台监测，不显示 Tk 窗口；供 macOS 原生灵动岛使用",
     )
+    parser.add_argument(
+        "--assume-game-running",
+        action="store_true",
+        help="由原生生命周期桥接器启动时，直接进入排队数据同步",
+    )
     args = parser.parse_args()
 
     log = setup_logging()
@@ -841,7 +908,7 @@ def main() -> int:
     if args.headless:
         thread = threading.Thread(
             target=monitor_loop,
-            args=(cfg, shared, ui_queue, stop_event),
+            args=(cfg, shared, ui_queue, stop_event, args.assume_game_running),
             daemon=False,
         )
         thread.start()
